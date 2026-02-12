@@ -1,0 +1,21 @@
+# Dependencias del Dictado Radiológico Python
+
+# Interfaz gráfica (incluida en Python)
+# tkinter (viene con Python)
+
+# Grabación de audio
+pyaudio>=0.2.13
+
+# Transcripción - Groq (PRIMERO - más rápido y generoso)
+# API gratuita con Whisper para transcripción de voz
+groq>=0.5.0
+
+# Transcripción - Gemini (FALLBACK)
+# API de Google como alternativa
+google-generativeai>=0.3.0
+
+# Compresión de audio (para grabaciones largas como la web original)
+pydub>=0.25.1
+
+# Utilidades
+python-dotenv>=1.0.0
