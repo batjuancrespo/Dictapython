@@ -195,20 +195,48 @@ class DictadoRadiologicoApp:
                               highlightbackground=COLORS['border'],
                               highlightthickness=1, padx=30, pady=20)
         title_frame.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0, 20))
+        title_frame.columnconfigure(1, weight=1)  # La columna de frases se expande
         
-        title_label = tk.Label(title_frame, 
+        # Frame izquierdo para el título
+        title_left = tk.Frame(title_frame, bg=COLORS['bg_secondary'])
+        title_left.grid(row=0, column=0, sticky='w')
+        
+        title_label = tk.Label(title_left, 
                               text="Dictado Radiológico ",
                               bg=COLORS['bg_secondary'],
                               fg=COLORS['text_primary'],
                               font=('Segoe UI', 28, 'bold'))
         title_label.pack(side=tk.LEFT)
         
-        subtitle_label = tk.Label(title_frame,
+        subtitle_label = tk.Label(title_left,
                                  text="(by JCP)",
                                  bg=COLORS['bg_secondary'],
                                  fg=COLORS['text_secondary'],
                                  font=('Segoe UI', 16))
         subtitle_label.pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Frame derecho para las frases célebres (más espacio)
+        quotes_frame_title = tk.Frame(title_frame, bg=COLORS['bg_secondary'])
+        quotes_frame_title.grid(row=0, column=1, sticky='e', padx=(40, 0))
+        
+        # Label para la frase (con más ancho disponible)
+        self.quote_label = tk.Label(quotes_frame_title,
+                                   text=self.quotes[0][0] if self.quotes else "",
+                                   bg=COLORS['bg_secondary'],
+                                   fg=COLORS['text_primary'],
+                                   font=('Segoe UI', 13, 'italic'),
+                                   wraplength=600,  # Más ancho para frases largas
+                                   justify=tk.RIGHT)
+        self.quote_label.pack(anchor='e')
+        
+        # Label para el autor
+        self.quote_author_label = tk.Label(quotes_frame_title,
+                                          text=f"— {self.quotes[0][1]}" if self.quotes else "",
+                                          bg=COLORS['bg_secondary'],
+                                          fg=COLORS['text_secondary'],
+                                          font=('Segoe UI', 10),
+                                          justify=tk.RIGHT)
+        self.quote_author_label.pack(anchor='e')
         
         # ==================== PANEL DE CONTROLES ====================
         controls_frame = tk.LabelFrame(self.main_frame, text=" Controles ",
@@ -286,32 +314,6 @@ class DictadoRadiologicoApp:
                                      hover_color='#218838',
                                      font_size=13, width=14)
         self.vocab_btn.pack(side=tk.LEFT, padx=5)
-        
-        # Separador antes de las frases célebres
-        separator3 = tk.Frame(buttons_frame, bg=COLORS['border'], width=2)
-        separator3.pack(side=tk.LEFT, fill=tk.Y, padx=10)
-        
-        # Frame para frases célebres
-        quotes_frame = tk.Frame(buttons_frame, bg=COLORS['bg_secondary'])
-        quotes_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
-        
-        # Label para la frase
-        self.quote_label = tk.Label(quotes_frame,
-                                   text=self.quotes[0][0],
-                                   bg=COLORS['bg_secondary'],
-                                   fg=COLORS['text_primary'],
-                                   font=('Segoe UI', 13, 'italic'),
-                                   wraplength=400,
-                                   justify=tk.CENTER)
-        self.quote_label.pack(anchor='center')
-        
-        # Label para el autor
-        self.quote_author_label = tk.Label(quotes_frame,
-                                          text=f"— {self.quotes[0][1]}",
-                                          bg=COLORS['bg_secondary'],
-                                          fg=COLORS['text_secondary'],
-                                          font=('Segoe UI', 10))
-        self.quote_author_label.pack(anchor='e', padx=(0, 10))
         
         # Estado y tiempo
         status_frame = tk.Frame(controls_frame, bg=COLORS['bg_secondary'], pady=10)
@@ -511,22 +513,29 @@ class DictadoRadiologicoApp:
         batman_paths = [p for p in batman_paths if os.path.exists(p)]
         
         # Cargar todas las imágenes disponibles para rotación
-        if PIL_AVAILABLE and batman_paths:
+        if batman_paths:
             try:
-                from PIL import Image as PILImage, ImageTk as PILImageTk
-                for img_path in batman_paths:
-                    try:
-                        img = PILImage.open(img_path)
-                        # Altura fija de 300px
-                        target_height = 300
-                        aspect_ratio = img.width / img.height
-                        target_width = int(target_height * aspect_ratio)
-                        img = img.resize((target_width, target_height), PILImage.BICUBIC if hasattr(PILImage, 'BICUBIC') else PILImage.LANCZOS)
-                        photo = PILImageTk.PhotoImage(img)
-                        self.batman_images.append((photo, img_path))
-                        self.image_refs.append(photo)
-                    except Exception as e:
-                        print(f"Error cargando imagen {img_path}: {e}")
+                if PIL_AVAILABLE:
+                    from PIL import Image as PILImage, ImageTk as PILImageTk
+                    for img_path in batman_paths:
+                        try:
+                            img = PILImage.open(img_path)
+                            # Altura fija de 300px
+                            target_height = 300
+                            aspect_ratio = img.width / img.height
+                            target_width = int(target_height * aspect_ratio)
+                            # Usar método de resize disponible
+                            if hasattr(PILImage, 'LANCZOS'):
+                                img = img.resize((target_width, target_height), PILImage.LANCZOS)
+                            elif hasattr(PILImage, 'BICUBIC'):
+                                img = img.resize((target_width, target_height), PILImage.BICUBIC)
+                            else:
+                                img = img.resize((target_width, target_height))
+                            photo = PILImageTk.PhotoImage(img)
+                            self.batman_images.append((photo, img_path))
+                            self.image_refs.append(photo)
+                        except Exception as e:
+                            print(f"Error cargando imagen {img_path}: {e}")
                 
                 if self.batman_images:
                     # Crear frame con marco blanco
@@ -537,8 +546,14 @@ class DictadoRadiologicoApp:
                     self.batman_label = tk.Label(self.batman_frame, image=self.batman_images[0][0], bg=COLORS['bg_secondary'])
                     self.batman_label.pack(padx=2, pady=2)  # Pequeño padding para el marco
                     print(f"Cargadas {len(self.batman_images)} imágenes de Batman para rotación")
+                else:
+                    print("No se pudieron cargar imágenes de Batman")
             except Exception as e:
                 print(f"Error en carga de imágenes Batman: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            print("No se encontraron imágenes en la carpeta batman_images")
         
         # Separador
         row += 1
