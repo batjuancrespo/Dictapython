@@ -143,9 +143,12 @@ class DictadoRadiologicoApp:
         if self.batman_images:
             self._start_batman_rotation()
         
-        # Atajo de teclado: Shift+Meta+I para empezar/detener dictamen
-        self.root.bind('<Shift-Meta-i>', lambda e: self.toggle_recording())
-        self.root.bind('<Shift-Meta-I>', lambda e: self.toggle_recording())  # Case insensitive
+        # Atajo de teclado: Shift+Ctrl (como la web original) para empezar/detener dictamen
+        self.root.bind('<Shift-Control_L>', lambda e: self.toggle_recording())
+        self.root.bind('<Shift-Control_R>', lambda e: self.toggle_recording())
+        # Alternativa: Ctrl+Shift (ambas órdenes cubren los casos)
+        self.root.bind('<Control-Shift_L>', lambda e: self.toggle_recording())
+        self.root.bind('<Control-Shift_R>', lambda e: self.toggle_recording())
     
     def setup_theme(self):
         """Configura el tema oscuro global"""
