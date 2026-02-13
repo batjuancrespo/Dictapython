@@ -142,6 +142,11 @@ class DictadoRadiologicoApp:
         # Iniciar rotación de imágenes de Batman (si hay imágenes)
         if self.batman_images:
             self._start_batman_rotation()
+        
+        # Atajo de teclado: Shift+Meta (Win) para empezar/detener dictado
+        self.root.bind('<Shift-Meta_L>', lambda e: self.toggle_recording())
+        self.root.bind('<Shift-Meta_R>', lambda e: self.toggle_recording())
+        self.root.bind('<Shift-Win_L>', lambda e: self.toggle_recording())  # Alternativa para Windows
     
     def setup_theme(self):
         """Configura el tema oscuro global"""
