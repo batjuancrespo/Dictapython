@@ -116,7 +116,7 @@ QUOTES = [
     ("El limón es vitamina C pura.", "Anónimo"),
     ("El jengibre alivia todo mal.", "Anónimo"),
     ("La cúrcuma es antiinflamatoria poderosa.", "Anónimo"),
-    ("El agua con limón es elixir matutino.", "Anónimo")
+    ("El agua con limón es elixir matutino.", "Anónimo"),
     
     # EJEMPLOS DE FRASES DE PELÍCULAS (Añade más siguiendo este formato)
     ("Que la Fuerza te acompañe.", "Star Wars"),
@@ -208,7 +208,7 @@ QUOTES = [
     ("¡Yo soy… Iron Man!", "Avengers: Endgame"),
     ("¡Somos Groot!", "Guardianes de la Galaxia"),
     ("¡Wakanda por siempre!", "Black Panther"),
-    ("¡Avengers… unidos!", "Avengers: Endgame")
+    ("¡Avengers… unidos!", "Avengers: Endgame"),
     ("No hay que ir para atrás ni para darse impulso.", "Lao Tsé"),
     ("No hay caminos para la paz; la paz es el camino.", "Mahatma Gandhi"),
     ("Haz el amor y no la guerra.", "Proverbio hippie"),
