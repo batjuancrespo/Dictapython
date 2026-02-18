@@ -50,7 +50,7 @@ COLORS = {
 class StyledButton(tk.Button):
     """Botón estilizado"""
     def __init__(self, parent, text, command, bg_color, fg_color='white', 
-                 hover_color=None, font_size=12, height=2, **kwargs):
+                 hover_color=None, font_size=12, height=2, width=-1, **kwargs):
         self.bg_color = bg_color
         self.hover_color = hover_color or bg_color
         self.fg_color = fg_color
@@ -62,6 +62,7 @@ class StyledButton(tk.Button):
                         cursor='hand2', height=height,
                         activebackground=hover_color or bg_color,
                         activeforeground=fg_color,
+                        width=width if width > 0 else -1,
                         **kwargs)
         
         self.bind('<Enter>', self.on_enter)
@@ -321,6 +322,13 @@ class DictadoRadiologicoApp:
                                      hover_color='#218838',
                                      font_size=13, width=14)
         self.vocab_btn.pack(side=tk.LEFT, padx=5)
+        
+        self.correct_ai_btn = StyledButton(buttons_frame, "✨ Corregir con IA",
+                                          self.correct_with_ai,
+                                          '#8957e5',
+                                          hover_color='#9b72f5',
+                                          font_size=13, width=16)
+        self.correct_ai_btn.pack(side=tk.LEFT, padx=5)
         
         # Estado y tiempo
         status_frame = tk.Frame(controls_frame, bg=COLORS['bg_secondary'], pady=10)
@@ -1163,8 +1171,67 @@ class DictadoRadiologicoApp:
     
     # ==================== VOCABULARIO ====================
     def open_vocabulary_manager(self):
-        """Abre el gestor de vocabulario"""
-        VocabularyWindow(self.root, self.vocabulary, self.text_processor)
+        """Abre el gestor de vocabulario. Si hay texto seleccionado, lo pre-llena."""
+        # Detectar texto seleccionado
+        selected_text = ""
+        
+        # Intentar obtener selección del campo de informe (más común)
+        try:
+            selected = self.informe_text.get(tk.SEL_FIRST, tk.SEL_LAST).strip()
+            if selected:
+                selected_text = selected
+        except:
+            pass
+        
+        # Si no hay selección en informe, intentar en técnica
+        if not selected_text:
+            try:
+                selected = self.tecnica_text.get(tk.SEL_FIRST, tk.SEL_LAST).strip()
+                if selected:
+                    selected_text = selected
+            except:
+                pass
+        
+        # Abrir ventana con texto seleccionado (si lo hay)
+        VocabularyWindow(self.root, self.vocabulary, self.text_processor, 
+                        selected_text, self._apply_vocabulary_to_text)
+    
+    def _apply_vocabulary_to_text(self, incorrect, correct):
+        """Aplica una corrección de vocabulario a todo el texto actual"""
+        # Aplicar a técnica
+        tecnica = self.tecnica_text.get('1.0', tk.END)
+        if tecnica.strip():
+            corrected_tecnica = tecnica.replace(incorrect, correct)
+            self.tecnica_text.delete('1.0', tk.END)
+            self.tecnica_text.insert('1.0', corrected_tecnica)
+        
+        # Aplicar a informe
+        informe = self.informe_text.get('1.0', tk.END)
+        if informe.strip():
+            corrected_informe = informe.replace(incorrect, correct)
+            self.informe_text.delete('1.0', tk.END)
+            self.informe_text.insert('1.0', corrected_informe)
+    
+    # ==================== CORREGIR CON IA ====================
+    def correct_with_ai(self):
+        """Corrige el texto con IA mostrando cambios seleccionables"""
+        # Obtener texto de ambos cuadros
+        tecnica = self.tecnica_text.get('1.0', tk.END).strip()
+        informe = self.informe_text.get('1.0', tk.END).strip()
+        
+        if not tecnica and not informe:
+            messagebox.showinfo("Información", "No hay texto para corregir")
+            return
+        
+        # Combinar texto para corrección
+        full_text = ""
+        if tecnica:
+            full_text += tecnica + "\n\n"
+        if informe:
+            full_text += informe
+        
+        # Abrir ventana de corrección con IA
+        AICorrectionWindow(self.root, full_text, self.transcription, self)
 
 
 class JuanizadorWindow:
@@ -1534,7 +1601,8 @@ class JuanizadorWindow:
 
 class VocabularyWindow:
     """Ventana de gestión de vocabulario estilizada"""
-    def __init__(self, parent, vocabulary_manager, text_processor):
+    def __init__(self, parent, vocabulary_manager, text_processor, 
+                 prefill_text="", apply_callback=None):
         self.window = tk.Toplevel(parent)
         self.window.title("Gestionar Vocabulario Personalizado")
         self.window.geometry("800x600")
@@ -1542,9 +1610,15 @@ class VocabularyWindow:
         
         self.vocab = vocabulary_manager
         self.processor = text_processor
+        self.prefill_text = prefill_text  # Texto pre-seleccionado
+        self.apply_callback = apply_callback  # Callback para aplicar corrección
         
         self.setup_ui()
         self.load_vocabulary()
+        
+        # Si hay texto pre-llenado, abrir automáticamente el diálogo de añadir regla
+        if prefill_text:
+            self.window.after(100, self.add_rule)
     
     def setup_ui(self):
         """Configura la UI estilizada"""
@@ -1635,19 +1709,26 @@ class VocabularyWindow:
     def add_rule(self):
         """Añade una nueva regla"""
         dialog = tk.Toplevel(self.window)
-        dialog.title("Añadir Regla")
-        dialog.geometry("500x200")
+        dialog.title("Añadir Regla de Vocabulario")
+        dialog.geometry("550x280")
         dialog.configure(bg=COLORS['bg_primary'])
         dialog.transient(self.window)
         dialog.grab_set()
         
-        frame = tk.Frame(dialog, bg=COLORS['bg_primary'], padx=20, pady=20)
+        frame = tk.Frame(dialog, bg=COLORS['bg_primary'], padx=25, pady=20)
         frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Título si viene de selección
+        if self.prefill_text:
+            title = tk.Label(frame, text="📝 Texto seleccionado detectado",
+                           bg=COLORS['bg_primary'], fg='#58a6ff',
+                           font=('Segoe UI', 11, 'bold'))
+            title.grid(row=0, column=0, columnspan=2, pady=(0, 10), sticky='w')
         
         tk.Label(frame, text="Texto incorrecto:",
                 bg=COLORS['bg_primary'],
                 fg=COLORS['text_primary'],
-                font=('Segoe UI', 11)).grid(row=0, column=0, padx=5, pady=8, sticky='w')
+                font=('Segoe UI', 11)).grid(row=1, column=0, padx=5, pady=8, sticky='w')
         
         incorrect_entry = tk.Entry(frame, width=40, font=('Segoe UI', 11),
                                   bg=COLORS['bg_secondary'],
@@ -1656,12 +1737,12 @@ class VocabularyWindow:
                                   relief=tk.FLAT,
                                   highlightbackground=COLORS['border'],
                                   highlightthickness=1)
-        incorrect_entry.grid(row=0, column=1, padx=5, pady=8)
+        incorrect_entry.grid(row=1, column=1, padx=5, pady=8)
         
         tk.Label(frame, text="Texto correcto:",
                 bg=COLORS['bg_primary'],
                 fg=COLORS['text_primary'],
-                font=('Segoe UI', 11)).grid(row=1, column=0, padx=5, pady=8, sticky='w')
+                font=('Segoe UI', 11)).grid(row=2, column=0, padx=5, pady=8, sticky='w')
         
         correct_entry = tk.Entry(frame, width=40, font=('Segoe UI', 11),
                                 bg=COLORS['bg_secondary'],
@@ -1670,20 +1751,45 @@ class VocabularyWindow:
                                 relief=tk.FLAT,
                                 highlightbackground=COLORS['border'],
                                 highlightthickness=1)
-        correct_entry.grid(row=1, column=1, padx=5, pady=8)
+        correct_entry.grid(row=2, column=1, padx=5, pady=8)
+        
+        # Pre-llenar con el texto seleccionado
+        if self.prefill_text:
+            incorrect_entry.insert(0, self.prefill_text)
+            correct_entry.focus()  # Focus en el campo correcto
         
         def save():
             incorrect = incorrect_entry.get().strip()
             correct = correct_entry.get().strip()
             if incorrect and correct:
+                # Guardar la regla
                 self.vocab.add_rule(incorrect, correct)
                 self.load_vocabulary()
+                
+                # Aplicar la corrección a todo el texto si hay callback
+                if self.apply_callback:
+                    self.apply_callback(incorrect, correct)
+                    messagebox.showinfo("Aplicado", 
+                        f"Se ha añadido la regla y aplicado al texto:\n\n'{incorrect}' → '{correct}'")
+                else:
+                    messagebox.showinfo("Guardado", f"Regla añadida:\n'{incorrect}' → '{correct}'")
+                
                 dialog.destroy()
         
-        StyledButton(frame, "Guardar", save, COLORS['btn_success'],
-                    font_size=11, width=15).grid(row=2, column=0, columnspan=2, pady=15)
+        btn_frame = tk.Frame(frame, bg=COLORS['bg_primary'])
+        btn_frame.grid(row=3, column=0, columnspan=2, pady=15)
         
-        incorrect_entry.focus()
+        StyledButton(btn_frame, "Guardar y Aplicar", save, COLORS['btn_success'],
+                    font_size=11, width=18).pack(side=tk.LEFT, padx=5)
+        
+        StyledButton(btn_frame, "Cancelar", lambda: dialog.destroy(), '#6b7280',
+                    font_size=11, width=12).pack(side=tk.LEFT, padx=5)
+        
+        # Focus inicial
+        if self.prefill_text:
+            correct_entry.focus()
+        else:
+            incorrect_entry.focus()
     
     def delete_rule(self):
         """Elimina la regla seleccionada"""
@@ -1717,4 +1823,417 @@ class VocabularyWindow:
     
     def close(self):
         """Cierra la ventana"""
+        self.window.destroy()
+
+
+class AICorrectionWindow:
+    """Modal de corrección IA - clonado de la web"""
+    def __init__(self, parent, text, transcription_service, main_app):
+        self.window = tk.Toplevel(parent)
+        self.window.title("Revisar Cambios")
+        self.window.geometry("950x750")
+        self.window.configure(bg='#0d1117')
+        self.window.transient(parent)
+        self.window.grab_set()
+        
+        self.original_text = text
+        self.transcription = transcription_service
+        self.main_app = main_app
+        
+        # Chunks: [[id, word, added, removed, accepted]]
+        self.chunks = []
+        self.chunk_positions = {}  # id -> (start, end)
+        
+        self._setup_ui()
+        
+        # Procesar después de que la ventana esté lista
+        self.window.after(100, self._process)
+    
+    def _setup_ui(self):
+        """Interfaz estilo web"""
+        # Header morado
+        header = tk.Frame(self.window, bg='#581c87', padx=20, pady=12)
+        header.pack(fill=tk.X, side=tk.TOP)
+        
+        tk.Label(header, text="✓ REVISAR CAMBIOS", 
+                bg='#581c87', fg='white', 
+                font=('Segoe UI', 18, 'bold')).pack(side=tk.LEFT)
+        
+        tk.Label(header, text="Corrección Analítica IA • Verificación QA", 
+                bg='#581c87', fg='#c4b5fd', 
+                font=('Segoe UI', 9)).pack(side=tk.LEFT, padx=(15, 0))
+        
+        tk.Button(header, text="✕", command=self._close,
+                 bg='#581c87', fg='white', 
+                 font=('Segoe UI', 16), relief=tk.FLAT, 
+                 cursor='hand2').pack(side=tk.RIGHT)
+        
+        # Footer - ANTES del body para que se vea
+        footer = tk.Frame(self.window, bg='#161b22', padx=20, pady=15)
+        footer.pack(fill=tk.X, side=tk.BOTTOM)
+        
+        self.status_label = tk.Label(footer, text="Procesando...", 
+                                    bg='#161b22', fg='#8b949e', 
+                                    font=('Segoe UI', 11))
+        self.status_label.pack(side=tk.LEFT)
+        
+        self.cancel_btn = tk.Button(footer, text="Cancelar", 
+                                   command=self._close, bg='#6b7280', 
+                                   fg='white', font=('Segoe UI', 12, 'bold'), 
+                                   relief=tk.RAISED, cursor='hand2', 
+                                   padx=25, pady=10)
+        self.cancel_btn.pack(side=tk.RIGHT)
+        
+        self.apply_btn = tk.Button(footer, text="Aplicar cambios", 
+                                  command=self._apply, bg='#22c55e', 
+                                  fg='white', font=('Segoe UI', 12, 'bold'), 
+                                  relief=tk.RAISED, cursor='hand2', 
+                                  padx=30, pady=10)
+        self.apply_btn.pack(side=tk.RIGHT, padx=(10, 0))
+        
+        # Body - ENTRE header y footer
+        body = tk.Frame(self.window, bg='#0d1117', padx=20, pady=15)
+        body.pack(fill=tk.BOTH, expand=True)
+        
+        tk.Label(body, text="Haz clic en los cambios para aceptarlos o rechazarlos:", 
+                bg='#0d1117', fg='#8b949e', 
+                font=('Segoe UI', 11)).pack(anchor='w', pady=(0, 8))
+        
+        # Diff panel
+        diff_frame = tk.Frame(body, bg='#161b22', padx=15, pady=15, 
+                             highlightbackground='#30363d', highlightthickness=1)
+        diff_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
+        
+        self.diff = tk.Text(diff_frame, bg='#161b22', fg='#c9d1d9', 
+                           font=('Segoe UI', 14), wrap=tk.WORD, 
+                           relief=tk.FLAT, padx=10, pady=10, 
+                           cursor='hand2')
+        scrollbar = tk.Scrollbar(diff_frame, command=self.diff.yview)
+        self.diff.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.diff.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Hacer el texto readonly pero clickable
+        self.diff.bind('<Key>', lambda e: 'break')  # Bloquear escritura
+        self.diff.bind('<Button-1>', self._on_click)  # Capturar clicks
+        
+        # Tags para colores
+        self.diff.tag_config('add', background='#238636', foreground='white')
+        self.diff.tag_config('rem', background='#da3633', foreground='white')
+        self.diff.tag_config('add_off', background='#30363d', foreground='#6e7681')
+        self.diff.tag_config('rem_off', background='#1f6feb', foreground='white')
+        self.diff.tag_config('norm', foreground='#c9d1d9')
+        self.diff.tag_config('error', foreground='#f85149')
+        self.diff.tag_config('processing', foreground='#8b949e')
+        
+        # Vista previa - SIEMPRE VISIBLE
+        preview_label = tk.Label(body, text="📄 Vista Previa Final (se actualiza con cada cambio)", 
+                                bg='#0d1117', fg='#58a6ff', 
+                                font=('Segoe UI', 11, 'bold'))
+        preview_label.pack(anchor='w', pady=(15, 5))
+        
+        preview_frame = tk.Frame(body, bg='#0d1117', padx=10, pady=10, 
+                                highlightbackground='#58a6ff', highlightthickness=2)
+        preview_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+        
+        self.preview = tk.Text(preview_frame, bg='#0d1117', fg='#c9d1d9', 
+                              font=('Segoe UI', 12), wrap=tk.WORD, 
+                              relief=tk.FLAT, padx=10, pady=10,
+                              height=8)
+        preview_scroll = tk.Scrollbar(preview_frame, command=self.preview.yview)
+        self.preview.configure(yscrollcommand=preview_scroll.set)
+        preview_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.preview.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.preview.config(state=tk.DISABLED)
+    
+    def _process(self):
+        """Procesa con IA"""
+        self.diff.insert(tk.END, "Procesando con IA...", 'processing')
+        self.window.update()
+        
+        prompt = f"""Corrige SOLO errores de ortografía, gramática y capitalización en el siguiente texto médico.
+
+REGLAS CRÍTICAS:
+1. MANTÉN EXACTAMENTE todos los saltos de línea (\\n) del texto original
+2. NO añadas ni elimines líneas
+3. NO cambies el formato ni la estructura
+4. Solo corrige:
+   - Palabras mal escritas
+   - Errores gramaticales
+   - CAPITALIZACIÓN incorrecta (nombres propios, inicio de oraciones, siglas médicas como TAC, RM, BI-RADS, etc.)
+
+REGLAS DE CAPITALIZACIÓN:
+- Primera letra de cada oración en mayúscula
+- Nombres propios y apellidos
+- Siglas médicas en mayúsculas (TAC, RM, TC, RMN, BI-RADS, TI-RADS, etc.)
+- Nombres de enfermedades eponímicas (Enfermedad de Crohn, Alzheimer, Parkinson)
+- NO cambiar capitalización de abreviaturas médicas comunes
+
+Texto original:
+{self.original_text}
+
+Texto corregido (manteniendo saltos de línea exactos):"""
+        
+        try:
+            corrected = self._call_ai(prompt)
+            self._compute_diff(self.original_text, corrected)
+            self._render()
+        except Exception as e:
+            self.diff.config(state=tk.NORMAL)
+            self.diff.delete('1.0', tk.END)
+            self.diff.insert(tk.END, f"Error: {str(e)}", 'error')
+            self.diff.config(state=tk.DISABLED)
+    
+    def _call_ai(self, prompt):
+        """Llama a la IA"""
+        if self.transcription.is_groq_available():
+            try:
+                response = self.transcription.groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=4000, temperature=0.1)
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                print(f"Groq error: {e}")
+        
+        if self.transcription.is_gemini_available():
+            try:
+                from config import GEMINI_MODELS
+                for m in GEMINI_MODELS:
+                    try:
+                        model = self.transcription.gemini_client.GenerativeModel(m)
+                        r = model.generate_content(prompt, generation_config={'temperature': 0.1})
+                        if r.text: 
+                            return r.text.strip()
+                    except:
+                        continue
+            except Exception as e:
+                print(f"Gemini error: {e}")
+        
+        raise Exception("No hay servicios de IA disponibles")
+    
+    def _compute_diff(self, orig, corr):
+        """Diff palabra por palabra preservando saltos de línea"""
+        import difflib
+        
+        # Dividir en líneas
+        orig_lines = orig.split('\n')
+        corr_lines = corr.split('\n')
+        
+        self.chunks = []
+        cid = 0
+        
+        # Comparar línea por línea
+        line_matcher = difflib.SequenceMatcher(None, orig_lines, corr_lines)
+        
+        for tag, i1, i2, j1, j2 in line_matcher.get_opcodes():
+            if tag == 'equal':
+                # Líneas iguales - mantenerlas
+                for line in orig_lines[i1:i2]:
+                    # Dividir cada línea en palabras
+                    words = line.split()
+                    for w in words:
+                        self.chunks.append([cid, w, False, False, True])
+                        cid += 1
+                    # Añadir salto de línea como chunk especial
+                    self.chunks.append([cid, '\n', False, False, True])
+                    cid += 1
+            elif tag == 'replace':
+                # Líneas modificadas - diff palabra por palabra dentro
+                orig_text = ' '.join(orig_lines[i1:i2])
+                corr_text = ' '.join(corr_lines[j1:j2])
+                
+                ow = orig_text.split()
+                cw = corr_text.split()
+                
+                word_matcher = difflib.SequenceMatcher(None, ow, cw)
+                for wtag, wi1, wi2, wj1, wj2 in word_matcher.get_opcodes():
+                    if wtag == 'equal':
+                        for w in ow[wi1:wi2]:
+                            self.chunks.append([cid, w, False, False, True])
+                            cid += 1
+                    elif wtag == 'replace':
+                        for w in ow[wi1:wi2]:
+                            self.chunks.append([cid, w, False, True, True])
+                            cid += 1
+                        for w in cw[wj1:wj2]:
+                            self.chunks.append([cid, w, True, False, True])
+                            cid += 1
+                    elif wtag == 'delete':
+                        for w in ow[wi1:wi2]:
+                            self.chunks.append([cid, w, False, True, True])
+                            cid += 1
+                    elif wtag == 'insert':
+                        for w in cw[wj1:wj2]:
+                            self.chunks.append([cid, w, True, False, True])
+                            cid += 1
+                
+                # Añadir salto de línea
+                self.chunks.append([cid, '\n', False, False, True])
+                cid += 1
+            elif tag == 'delete':
+                # Líneas eliminadas
+                for line in orig_lines[i1:i2]:
+                    words = line.split()
+                    for w in words:
+                        self.chunks.append([cid, w, False, True, True])
+                        cid += 1
+                    self.chunks.append([cid, '\n', False, False, True])
+                    cid += 1
+            elif tag == 'insert':
+                # Líneas añadidas
+                for line in corr_lines[j1:j2]:
+                    words = line.split()
+                    for w in words:
+                        self.chunks.append([cid, w, True, False, True])
+                        cid += 1
+                    self.chunks.append([cid, '\n', False, False, True])
+                    cid += 1
+    
+    def _render(self):
+        """Renderiza el diff"""
+        self.diff.config(state=tk.NORMAL)
+        self.diff.delete('1.0', tk.END)
+        self.chunk_positions = {}
+        
+        for cid, w, add, rem, acc in self.chunks:
+            # Manejar saltos de línea
+            if w == '\n':
+                self.diff.insert(tk.END, '\n')
+                self.chunk_positions[cid] = False  # no editable
+                continue
+            
+            if add and acc:
+                tag = 'add'
+            elif add and not acc:
+                tag = 'add_off'
+            elif rem and acc:
+                tag = 'rem'
+            elif rem and not acc:
+                tag = 'rem_off'
+            else:
+                tag = 'norm'
+            
+            # Crear un tag único para cada chunk
+            chunk_tag = f'chunk_{cid}'
+            
+            # Configurar el tag con los colores adecuados
+            if tag == 'add':
+                self.diff.tag_config(chunk_tag, background='#238636', foreground='white')
+            elif tag == 'add_off':
+                self.diff.tag_config(chunk_tag, background='#30363d', foreground='#6e7681')
+            elif tag == 'rem':
+                self.diff.tag_config(chunk_tag, background='#da3633', foreground='white')
+            elif tag == 'rem_off':
+                self.diff.tag_config(chunk_tag, background='#1f6feb', foreground='white')
+            else:
+                self.diff.tag_config(chunk_tag, foreground='#c9d1d9')
+            
+            # Guardar si es editable
+            self.chunk_positions[cid] = (add or rem)
+            
+            # Insertar texto con el tag único
+            self.diff.insert(tk.END, w + ' ', chunk_tag)
+            
+            # Bind click al tag
+            if add or rem:
+                self.diff.tag_bind(chunk_tag, '<Button-1>', lambda e, c=cid: self._on_tag_click(c))
+        
+        self._update_preview()
+    
+    def _on_tag_click(self, chunk_id):
+        """Maneja click en un tag"""
+        for c in self.chunks:
+            if c[0] == chunk_id and (c[2] or c[3]):  # editable
+                c[4] = not c[4]
+                self._render()
+                return
+    
+    def _on_click(self, event):
+        """Fallback para clicks"""
+        pass
+    
+    def _update_preview(self):
+        """Actualiza la vista previa"""
+        result = []
+        for c in self.chunks:
+            cid, w, add, rem, acc = c
+            if w == '\n':
+                result.append('\n')
+            elif add and acc:
+                result.append(w)
+            elif rem and not acc:
+                result.append(w)
+            elif not add and not rem:
+                result.append(w)
+        
+        # Unir con espacios, pero preservar saltos de línea
+        text_parts = []
+        current_line = []
+        
+        for item in result:
+            if item == '\n':
+                text_parts.append(' '.join(current_line))
+                current_line = []
+            else:
+                current_line.append(item)
+        
+        if current_line:
+            text_parts.append(' '.join(current_line))
+        
+        text = '\n'.join(text_parts)
+        
+        self.preview.config(state=tk.NORMAL)
+        self.preview.delete('1.0', tk.END)
+        self.preview.insert('1.0', text)
+        self.preview.config(state=tk.DISABLED)
+        
+        # Actualizar contador
+        accepted = sum(1 for c in self.chunks if c[4] and (c[2] or c[3]))
+        rejected = sum(1 for c in self.chunks if not c[4] and (c[2] or c[3]))
+        self.status_label.config(text=f"✓ {accepted} aceptados | ✗ {rejected} rechazados")
+    
+    def _apply(self):
+        """Aplica los cambios"""
+        result = []
+        for c in self.chunks:
+            cid, w, add, rem, acc = c
+            if w == '\n':
+                result.append('\n')
+            elif add and acc:
+                result.append(w)
+            elif rem and not acc:
+                result.append(w)
+            elif not add and not rem:
+                result.append(w)
+        
+        # Unir preservando saltos de línea
+        text_parts = []
+        current_line = []
+        
+        for item in result:
+            if item == '\n':
+                text_parts.append(' '.join(current_line))
+                current_line = []
+            else:
+                current_line.append(item)
+        
+        if current_line:
+            text_parts.append(' '.join(current_line))
+        
+        text = '\n'.join(text_parts)
+        
+        parts = text.split('\n\n', 1)
+        if len(parts) == 2:
+            self.main_app.tecnica_text.delete('1.0', tk.END)
+            self.main_app.tecnica_text.insert('1.0', parts[0])
+            self.main_app.informe_text.delete('1.0', tk.END)
+            self.main_app.informe_text.insert('1.0', parts[1])
+        else:
+            self.main_app.informe_text.delete('1.0', tk.END)
+            self.main_app.informe_text.insert('1.0', text)
+        
+        self._close()
+    
+    def _close(self):
         self.window.destroy()
