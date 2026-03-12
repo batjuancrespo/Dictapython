@@ -116,11 +116,20 @@ class TranscriptionService:
                 on_status("Transcribiendo con Groq (Whisper)...")
             
             with open(audio_file_path, "rb") as file:
+                # Prompt mejorado con léxico médico y comandos claros
+                medical_prompt = (
+                    "Léxico médico: bazo, hígado, páncreas, riñones, adenopatías, parénquima, homogéneo, bordes lisos, "
+                    "esplenomesentérico, ateromatosis, aortoilíaca, hemiabdomen. "
+                    "Comandos de puntuación: PUNTO Y APARTE (salto de línea), PUNTO Y SEGUIDO (.), COMA (,), DOS PUNTOS (:). "
+                    "Instrucción: Transcribe exactamente lo que escuches. No intentes corregir la gramática ni añadir puntuación por tu cuenta. "
+                    "Si escuchas 'punto y aparte', escribe 'punto y aparte'. No pongas mayúsculas al azar."
+                )
+                
                 transcription = self.groq_client.audio.transcriptions.create(
                     file=(audio_file_path, file.read()),
                     model=GROQ_MODELS[0],  # whisper-large-v3
                     language="es",
-                    prompt="""Esta es una transcripción literal sin puntuación. No añadas puntos, ni comas, ni signos de interrogación. No añadas saltos de línea. Escribe todo seguido en minúsculas a menos que sea un nombre propio. Si escuchas comandos como "punto", "coma" o "nuevo párrafo", escríbelos literalmente como palabras. No corrijas la sintaxis."""
+                    prompt=medical_prompt
                 )
             
             return transcription.text, None
