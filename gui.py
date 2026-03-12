@@ -1215,29 +1215,48 @@ class DictadoRadiologicoApp:
             self.process_audio(filename)
     
     def download_audio(self):
-        """Descarga el audio comprimido o el original si falló la compresión/transcripción"""
-        # Priorizar el archivo comprimido si existe y es más reciente que el original
+        """Descarga el audio permitiendo elegir entre comprimido y original si ambos existen"""
+        original_exists = getattr(self, 'current_audio_file', None) and os.path.exists(self.current_audio_file)
+        compressed_exists = getattr(self, 'compressed_audio_file', None) and os.path.exists(self.compressed_audio_file)
+
         file_to_download = None
-        
-        if getattr(self, 'compressed_audio_file', None) and os.path.exists(self.compressed_audio_file):
+
+        if original_exists and compressed_exists:
+            # Preguntar al usuario cuál quiere descargar
+            response = messagebox.askyesnocancel(
+                "Elegir formato",
+                "Se han encontrado ambas versiones del audio.\n\n"
+                "¿Desea descargar la versión comprimida (WebM)?\n\n"
+                "• Sí: Descargar versión ligera (WebM)\n"
+                "• No: Descargar versión original sin pérdida (WAV)\n"
+                "• Cancelar: No descargar nada"
+            )
+            
+            if response is True:  # Sí
+                file_to_download = self.compressed_audio_file
+            elif response is False:  # No
+                file_to_download = self.current_audio_file
+            else:  # Cancelar o cerrar ventana
+                return
+        elif compressed_exists:
             file_to_download = self.compressed_audio_file
-            
-        # Si no hay comprimido válido o el usuario acaba de grabar uno nuevo que no llegó a comprimirse
-        if not file_to_download and getattr(self, 'current_audio_file', None) and os.path.exists(self.current_audio_file):
+        elif original_exists:
             file_to_download = self.current_audio_file
-            
-        # Verificar tiempos de modificación si ambos existen para dar siempre el último
-        if getattr(self, 'compressed_audio_file', None) and os.path.exists(self.compressed_audio_file) and getattr(self, 'current_audio_file', None) and os.path.exists(self.current_audio_file):
-             if os.path.getmtime(self.current_audio_file) > os.path.getmtime(self.compressed_audio_file):
-                  file_to_download = self.current_audio_file
-        
+        else:
+            messagebox.showinfo("Información", "No hay audio grabado disponible para descargar.")
+            return
+
         if file_to_download and os.path.exists(file_to_download):
             # Determinar extensión
             ext = '.webm' if file_to_download.endswith('.webm') else '.ogg' if file_to_download.endswith('.ogg') else '.wav'
             
+            # Nombre de tipo para el diálogo de guardado
+            ext_name = ext.upper()[1:]
+            
             dest = filedialog.asksaveasfilename(
+                title=f"Guardar audio como {ext_name}",
                 defaultextension=ext,
-                filetypes=[('Audio comprimido WebM', '*.webm'), ('Audio comprimido OGG', '*.ogg'), ('Audio WAV', '*.wav')],
+                filetypes=[(f'Audio {ext_name}', f'*{ext}')],
                 initialfile=f"dictado-radiologico-{self.get_timestamp()}{ext}"
             )
             if dest:
