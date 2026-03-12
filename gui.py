@@ -489,7 +489,7 @@ class DictadoRadiologicoApp:
         audio_container = tk.Frame(right_frame, bg=COLORS['bg_secondary'])
         audio_container.grid(row=row, column=0, columnspan=COLS, sticky='ew', pady=10)
         audio_container.columnconfigure(0, weight=1)  # Columna izquierda: audio
-        audio_container.columnconfigure(1, weight=0)  # Columna derecha: imagen
+        audio_container.columnconfigure(1, weight=0, minsize=460)  # Columna derecha: imagen (ANCHO FIJO PARA EVITAR SALTOS)
         
         # --- COLUMNA IZQUIERDA: Info de audio ---
         audio_left = tk.Frame(audio_container, bg=COLORS['bg_secondary'])
@@ -550,10 +550,14 @@ class DictadoRadiologicoApp:
                     for img_path in batman_paths:
                         try:
                             img = PILImage.open(img_path)
-                            # Altura fija de 300px
-                            target_height = 300
-                            aspect_ratio = img.width / img.height
-                            target_width = int(target_height * aspect_ratio)
+                            # Altura fija de 300px, pero ancho máximo de 450px para estabilidad
+                            max_w, max_h = 450, 300
+                            img_w, img_h = img.size
+                            
+                            # Calcular escala para encajar en 450x300 manteniendo aspecto
+                            ratio = min(max_w/img_w, max_h/img_h)
+                            target_width = int(img_w * ratio)
+                            target_height = int(img_h * ratio)
                             # Usar método de resize disponible
                             if hasattr(PILImage, 'LANCZOS'):
                                 img = img.resize((target_width, target_height), PILImage.LANCZOS)
@@ -568,13 +572,17 @@ class DictadoRadiologicoApp:
                             print(f"Error cargando imagen {img_path}: {e}")
                 
                 if self.batman_images:
-                    # Crear frame con marco blanco
-                    self.batman_frame = tk.Frame(audio_container, bg='white', highlightbackground='white', highlightthickness=2)
+                    # Crear frame con marco blanco y TAMAÑO FIJO para evitar que la interfaz se mueva
+                    # 454 = 450 de ancho máximo proyectado + bordes
+                    self.batman_frame = tk.Frame(audio_container, bg='white', 
+                                              width=454, height=304,
+                                              highlightbackground='white', highlightthickness=2)
                     self.batman_frame.grid(row=0, column=1, padx=(20, 0))
+                    self.batman_frame.grid_propagate(False) # Evitar que encoja al tamaño de la imagen
                     
-                    # Mostrar la primera imagen dentro del frame con marco
+                    # Mostrar la primera imagen centrada dentro del frame
                     self.batman_label = tk.Label(self.batman_frame, image=self.batman_images[0][0], bg=COLORS['bg_secondary'])
-                    self.batman_label.pack(padx=2, pady=2)  # Pequeño padding para el marco
+                    self.batman_label.place(relx=0.5, rely=0.5, anchor='center')
                     print(f"Cargadas {len(self.batman_images)} imágenes de Batman para rotación")
                 else:
                     print("No se pudieron cargar imágenes de Batman")
