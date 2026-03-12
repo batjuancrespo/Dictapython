@@ -572,11 +572,10 @@ class DictadoRadiologicoApp:
                             print(f"Error cargando imagen {img_path}: {e}")
                 
                 if self.batman_images:
-                    # Crear frame con marco blanco y TAMAÑO FIJO para evitar que la interfaz se mueva
-                    # 454 = 450 de ancho máximo proyectado + bordes
-                    self.batman_frame = tk.Frame(audio_container, bg='white', 
+                    # Crear frame con fondo del tema y TAMAÑO FIJO
+                    self.batman_frame = tk.Frame(audio_container, bg=COLORS['bg_secondary'], 
                                               width=454, height=304,
-                                              highlightbackground='white', highlightthickness=2)
+                                              highlightbackground=COLORS['border'], highlightthickness=1)
                     self.batman_frame.grid(row=0, column=1, padx=(20, 0))
                     self.batman_frame.grid_propagate(False) # Evitar que encoja al tamaño de la imagen
                     
