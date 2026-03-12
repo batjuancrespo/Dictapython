@@ -490,7 +490,7 @@ class DictadoRadiologicoApp:
         audio_container = tk.Frame(right_frame, bg=COLORS['bg_secondary'])
         audio_container.grid(row=row, column=0, columnspan=COLS, sticky='ew', pady=10)
         audio_container.columnconfigure(0, weight=1)  # Columna izquierda: audio
-        audio_container.columnconfigure(1, weight=0, minsize=460)  # Columna derecha: imagen (ANCHO FIJO PARA EVITAR SALTOS)
+        audio_container.columnconfigure(1, weight=0, minsize=230)  # Columna derecha: imagen (ANCHO FIJO REDUCIDO ADAPTADO A 220px)
         
         # --- COLUMNA IZQUIERDA: Info de audio ---
         audio_left = tk.Frame(audio_container, bg=COLORS['bg_secondary'])
@@ -551,11 +551,11 @@ class DictadoRadiologicoApp:
                     for img_path in batman_paths:
                         try:
                             img = PILImage.open(img_path)
-                            # Altura fija de 300px, pero ancho máximo de 450px para estabilidad
-                            max_w, max_h = 450, 300
+                            # Tamaño reducido: ancho máx 220px, alto máx 150px para compactar el panel
+                            max_w, max_h = 220, 150
                             img_w, img_h = img.size
                             
-                            # Calcular escala para encajar en 450x300 manteniendo aspecto
+                            # Calcular escala para encajar en 220x150 manteniendo aspecto
                             ratio = min(max_w/img_w, max_h/img_h)
                             target_width = int(img_w * ratio)
                             target_height = int(img_h * ratio)
@@ -573,9 +573,9 @@ class DictadoRadiologicoApp:
                             print(f"Error cargando imagen {img_path}: {e}")
                 
                 if self.batman_images:
-                    # Crear frame con fondo del tema y TAMAÑO FIJO (borde invisible)
+                    # Crear frame con fondo del tema y TAMAÑO FIJO REDUCIDO (224x154 para imagen de 220x150)
                     self.batman_frame = tk.Frame(audio_container, bg=COLORS['bg_secondary'], 
-                                              width=454, height=304,
+                                              width=224, height=154,
                                               highlightbackground=COLORS['bg_secondary'], highlightthickness=1)
                     self.batman_frame.grid(row=0, column=1, padx=(20, 0))
                     self.batman_frame.grid_propagate(False) # Evitar que encoja al tamaño de la imagen
