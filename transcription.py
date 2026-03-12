@@ -105,7 +105,8 @@ class TranscriptionService:
                 transcription = self.groq_client.audio.transcriptions.create(
                     file=(audio_file_path, file.read()),
                     model=GROQ_MODELS[0],  # whisper-large-v3
-                    language="es"
+                    language="es",
+                    prompt="""Esta es una transcripción literal sin puntuación. No añadas puntos, ni comas, ni signos de interrogación. No añadas saltos de línea. Escribe todo seguido en minúsculas a menos que sea un nombre propio. Si escuchas comandos como "punto", "coma" o "nuevo párrafo", escríbelos literalmente como palabras. No corrijas la sintaxis."""
                 )
             
             return transcription.text, None
