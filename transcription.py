@@ -132,8 +132,10 @@ class TranscriptionService:
                         contents=[
                             prompt,
                             {
-                                "mime_type": mime_type,
-                                "data": audio_base64
+                                "inline_data": {
+                                    "mime_type": mime_type,
+                                    "data": audio_base64
+                                }
                             }
                         ]
                     )
