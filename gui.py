@@ -1215,9 +1215,21 @@ class DictadoRadiologicoApp:
             self.process_audio(filename)
     
     def download_audio(self):
-        """Descarga el audio comprimido"""
-        # Usar archivo comprimido si existe, sino el original
-        file_to_download = self.compressed_audio_file or self.current_audio_file
+        """Descarga el audio comprimido o el original si falló la compresión/transcripción"""
+        # Priorizar el archivo comprimido si existe y es más reciente que el original
+        file_to_download = None
+        
+        if getattr(self, 'compressed_audio_file', None) and os.path.exists(self.compressed_audio_file):
+            file_to_download = self.compressed_audio_file
+            
+        # Si no hay comprimido válido o el usuario acaba de grabar uno nuevo que no llegó a comprimirse
+        if not file_to_download and getattr(self, 'current_audio_file', None) and os.path.exists(self.current_audio_file):
+            file_to_download = self.current_audio_file
+            
+        # Verificar tiempos de modificación si ambos existen para dar siempre el último
+        if getattr(self, 'compressed_audio_file', None) and os.path.exists(self.compressed_audio_file) and getattr(self, 'current_audio_file', None) and os.path.exists(self.current_audio_file):
+             if os.path.getmtime(self.current_audio_file) > os.path.getmtime(self.compressed_audio_file):
+                  file_to_download = self.current_audio_file
         
         if file_to_download and os.path.exists(file_to_download):
             # Determinar extensión
