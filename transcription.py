@@ -5,11 +5,11 @@ from config import GEMINI_API_KEY, GROQ_API_KEY, GEMINI_MODELS, GROQ_MODELS
 
 # Importar Gemini
 try:
-    import google.generativeai as genai
+    import google.genai as genai
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
-    print("ADVERTENCIA: google-generativeai no está instalado.")
+    print("ADVERTENCIA: google-genai no está instalado. Instala con: pip install google-genai")
 
 # Importar Groq
 try:
@@ -28,8 +28,7 @@ class TranscriptionService:
         # Configurar Gemini
         if GENAI_AVAILABLE and GEMINI_API_KEY:
             try:
-                genai.configure(api_key=GEMINI_API_KEY)
-                self.gemini_client = genai
+                self.gemini_client = genai.Client(api_key=GEMINI_API_KEY)
                 print("Gemini configurado correctamente")
             except Exception as e:
                 print(f"Error configurando Gemini: {e}")
@@ -127,15 +126,17 @@ class TranscriptionService:
 
             for model_name in GEMINI_MODELS:
                 try:
-                    model = self.gemini_client.GenerativeModel(model_name)
                     
-                    response = model.generate_content([
-                        prompt,
-                        {
-                            "mime_type": mime_type,
-                            "data": audio_base64
-                        }
-                    ])
+                    response = self.gemini_client.models.generate_content(
+                        model=model_name,
+                        contents=[
+                            prompt,
+                            {
+                                "mime_type": mime_type,
+                                "data": audio_base64
+                            }
+                        ]
+                    )
                     
                     if response and response.text:
                         return response.text, None
@@ -158,11 +159,7 @@ class TranscriptionService:
         
         file_size = os.path.getsize(audio_file_path)
         
-        # Solo comprimir si es mayor de 1MB para optimizar
-        if file_size <= 1 * 1024 * 1024:
-            print(f"Audio muy pequeño ({file_size/1024/1024:.2f}MB), no comprime")
-            return audio_file_path
-        
+        # Siempre comprimimos a WebM para las llamadas a la API
         if on_status:
             on_status("Comprimiendo audio...")
         
@@ -201,8 +198,10 @@ class TranscriptionService:
                 if on_status:
                     on_status("Procesando con IA...")
                 
-                model = self.gemini_client.GenerativeModel(GEMINI_MODELS[0])
-                response = model.generate_content(text)
+                response = self.gemini_client.models.generate_content(
+                    model=GEMINI_MODELS[0],
+                    contents=text
+                )
                 
                 if response and response.text:
                     return response.text, None
