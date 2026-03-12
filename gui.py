@@ -322,8 +322,11 @@ class DictadoRadiologicoApp:
                                      COLORS['btn_success'],
                                      hover_color='#218838',
                                      font_size=13, width=14)
-        self.vocab_btn.pack(side=tk.LEFT, padx=5)
-        
+        self.correct_ai_btn = StyledButton(buttons_frame, "✨ Corregir con IA",
+                                          self.correct_with_ai,
+                                          '#8957e5',
+                                          hover_color='#9b72f5',
+                                          font_size=13, width=16)
         self.correct_ai_btn.pack(side=tk.LEFT, padx=5)
         
         separator3 = tk.Frame(buttons_frame, bg=COLORS['border'], width=2)
