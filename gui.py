@@ -955,9 +955,47 @@ class DictadoRadiologicoApp:
                 if current_text.strip() and cursor_pos != '1.0':
                     prev_char_idx = self.informe_text.index(f"{cursor_pos} - 1 chars")
                     prev_char = self.informe_text.get(prev_char_idx, cursor_pos)
-                    if prev_char and not prev_char.isspace():
-                        text = ' ' + text
-                
+                    
+                    next_char = self.informe_text.get(cursor_pos, f"{cursor_pos} + 1 chars")
+                    
+                    # 1. Capitalization based on previous context
+                    if prev_char in ['.', '!', '?', '\n']:
+                        text = text[0].upper() + text[1:] if text else text
+                    elif prev_char.isspace():
+                        # If the character before the space is punctuation, capitalize
+                        try:
+                            prev_prev_char_idx = self.informe_text.index(f"{prev_char_idx} - 1 chars")
+                            prev_prev_char = self.informe_text.get(prev_prev_char_idx, prev_char_idx)
+                            if prev_prev_char in ['.', '!', '?', '\n']:
+                                text = text[0].upper() + text[1:] if text else text
+                            else:
+                                text = text[0].lower() + text[1:] if text else text
+                        except tk.TclError:
+                            # Start of text
+                            text = text[0].upper() + text[1:] if text else text
+                    else:
+                        text = text[0].lower() + text[1:] if text else text
+
+                    # 2. Add space before if needed
+                    # No space if previous char is already a space, a newline, or opening punctuation (like '(')
+                    if prev_char and not prev_char.isspace() and prev_char not in ['\n', '(']:
+                        # Especial handling for punctuation dictation
+                        if text[0] in [',', '.', ':', ';', '!', '?']:
+                            pass # Don't add space before punctuation
+                        else:
+                            text = ' ' + text
+                    
+                    # 3. Add space after if needed
+                    # Add space if the next char is a letter or number (not a space, not punctuation)
+                    if next_char and not next_char.isspace() and next_char not in [',', '.', ':', ';', '!', '?', ')', '\n']:
+                        text = text + ' '
+                elif cursor_pos == '1.0':
+                     text = text[0].upper() + text[1:] if text else text
+                     
+                     next_char = self.informe_text.get(cursor_pos, f"{cursor_pos} + 1 chars")
+                     if next_char and not next_char.isspace() and next_char not in [',', '.', ':', ';', '!', '?', ')', '\n']:
+                        text = text + ' '
+
                 self.informe_text.insert(cursor_pos, text)
     
     # ==================== FRASES CÉLEBRES ====================
