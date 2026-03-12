@@ -159,7 +159,7 @@ class TranscriptionService:
         
         file_size = os.path.getsize(audio_file_path)
         
-        # Siempre comprimimos a WebM para las llamadas a la API
+        # Siempre descomprimimos a wav si falla ffmpeg
         if on_status:
             on_status("Comprimiendo audio...")
         
@@ -180,10 +180,9 @@ class TranscriptionService:
             
         except Exception as e:
             print(f"Error comprimiendo: {e}")
-            # Verificar ffmpeg
-            ffmpeg_path = os.path.join(os.path.dirname(audio_file_path), 'ffmpeg.exe')
-            if not os.path.exists(ffmpeg_path):
-                print("ERROR: ffmpeg.exe no encontrado en la carpeta del programa")
+            # Si falla, simplemente devolvemos el original
+            if "ffmpeg" in str(e).lower() or "winerror 2" in str(e).lower():
+                print("ADVERTENCIA: ffmpeg no está instalado o no se encuentra en el PATH. Subiendo archivo sin comprimir.")
             return audio_file_path
     
     def transcribe_text(self, text, on_status=None):
