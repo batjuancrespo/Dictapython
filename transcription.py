@@ -166,6 +166,11 @@ class TranscriptionService:
         try:
             from pydub import AudioSegment
             
+            # Configurar ruta a ffmpeg de forma estricta (local en la misma carpeta)
+            ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg.exe")
+            if os.path.exists(ffmpeg_path):
+                AudioSegment.converter = ffmpeg_path
+            
             print(f"Comprimiendo {file_size/1024/1024:.2f}MB...")
             audio = AudioSegment.from_wav(audio_file_path)
             compressed_file = audio_file_path.replace('.wav', '.webm')
