@@ -60,7 +60,9 @@ class TranscriptionService:
         compressed_file = self._compress_audio(audio_file_path, on_status)
         
         # Determinar mime_type
-        if compressed_file.endswith('.ogg'):
+        if compressed_file.endswith('.webm'):
+            mime_type = "audio/webm"
+        elif compressed_file.endswith('.ogg'):
             mime_type = "audio/ogg"
         elif compressed_file.endswith('.mp3'):
             mime_type = "audio/mp3"
@@ -169,13 +171,13 @@ class TranscriptionService:
             
             print(f"Comprimiendo {file_size/1024/1024:.2f}MB...")
             audio = AudioSegment.from_wav(audio_file_path)
-            compressed_file = audio_file_path.replace('.wav', '.ogg')
+            compressed_file = audio_file_path.replace('.wav', '.webm')
             
-            # Exportar como OGG con bitrate bajo (32 kbps como la web)
-            audio.export(compressed_file, format="ogg", codec="libopus", bitrate="32k")
+            # Exportar como WebM con bitrate bajo
+            audio.export(compressed_file, format="webm", codec="libopus", bitrate="32k")
             
             new_size = os.path.getsize(compressed_file)
-            print(f"Comprimido: {file_size/1024/1024:.2f}MB -> {new_size/1024/1024:.2f}MB")
+            print(f"Comprimido a WebM: {file_size/1024/1024:.2f}MB -> {new_size/1024/1024:.2f}MB")
             
             return compressed_file if os.path.exists(compressed_file) else audio_file_path
             
