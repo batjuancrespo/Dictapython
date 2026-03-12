@@ -72,16 +72,16 @@ class TranscriptionService:
             audio_data = f.read()
         audio_base64 = base64.b64encode(audio_data).decode('utf-8')
         
-        # Intentar Groq primero
-        if self.is_groq_available():
-            result, error = self._transcribe_groq(compressed_file, on_status)
-            if result:
-                return result, compressed_file, None
-            print(f"Groq falló: {error}, intentando Gemini...")
-        
-        # Fallback a Gemini
+        # Intentar Gemini primero
         if self.is_gemini_available():
             result, error = self._transcribe_gemini(audio_base64, mime_type, on_status)
+            if result:
+                return result, compressed_file, None
+            print(f"Gemini falló: {error}, intentando Groq...")
+        
+        # Fallback a Groq
+        if self.is_groq_available():
+            result, error = self._transcribe_groq(compressed_file, on_status)
             return result, compressed_file, error
         
         return None, compressed_file, "No hay servicio de transcripción disponible. Configura GROQ_API_KEY o GEMINI_API_KEY en .env"
