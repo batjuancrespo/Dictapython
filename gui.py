@@ -97,6 +97,7 @@ class DictadoRadiologicoApp:
         self.current_audio_file = None
         self.compressed_audio_file = None  # Archivo comprimido (OGG)
         self.is_processing = False
+        self.provider_var = tk.StringVar(value='Gemini')
         
         # Configurar callbacks del recorder
         self.recorder.on_status_change = self.on_recording_status_change
@@ -323,12 +324,23 @@ class DictadoRadiologicoApp:
                                      font_size=13, width=14)
         self.vocab_btn.pack(side=tk.LEFT, padx=5)
         
-        self.correct_ai_btn = StyledButton(buttons_frame, "✨ Corregir con IA",
-                                          self.correct_with_ai,
-                                          '#8957e5',
-                                          hover_color='#9b72f5',
-                                          font_size=13, width=16)
         self.correct_ai_btn.pack(side=tk.LEFT, padx=5)
+        
+        separator3 = tk.Frame(buttons_frame, bg=COLORS['border'], width=2)
+        separator3.pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        
+        # Selector de Proveedor
+        tk.Label(buttons_frame, text="IA:",
+                 bg=COLORS['bg_secondary'],
+                 fg=COLORS['text_primary'],
+                 font=('Segoe UI', 11, 'bold')).pack(side=tk.LEFT, padx=(5, 2))
+        
+        self.provider_combo = ttk.Combobox(buttons_frame, 
+                                          textvariable=self.provider_var,
+                                          values=['Gemini', 'Groq'],
+                                          state='readonly', width=8, 
+                                          font=('Segoe UI', 11))
+        self.provider_combo.pack(side=tk.LEFT, padx=5)
         
         # Estado y tiempo
         status_frame = tk.Frame(controls_frame, bg=COLORS['bg_secondary'], pady=10)
@@ -884,6 +896,7 @@ class DictadoRadiologicoApp:
             
             text, compressed_file, error = self.transcription.transcribe_audio(
                 audio_file,
+                provider=self.provider_var.get(),
                 on_status=lambda s: self.root.after(0, lambda: self.set_status(s, COLORS['processing']))
             )
             
