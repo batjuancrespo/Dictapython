@@ -944,10 +944,55 @@ class DictadoRadiologicoApp:
         """Inserta texto en la posición del cursor"""
         if text:
             try:
+                # Text is selected, replace it
                 sel_start = self.informe_text.index(tk.SEL_FIRST)
                 sel_end = self.informe_text.index(tk.SEL_LAST)
+                
+                # Check characters around selection for context
+                try:
+                    prev_char_idx = self.informe_text.index(f"{sel_start} - 1 chars")
+                    prev_char = self.informe_text.get(prev_char_idx, sel_start)
+                except tk.TclError:
+                    prev_char = ""
+                    
+                next_char = self.informe_text.get(sel_end, f"{sel_end} + 1 chars")
+
+                # Delete selected text
                 self.informe_text.delete(sel_start, sel_end)
+                
+                # Apply rules based on selection context
+                if sel_start != '1.0':
+                    # 1. Capitalization
+                    if prev_char in ['.', '!', '?', '\n']:
+                        text = text[0].upper() + text[1:] if text else text
+                    elif prev_char.isspace():
+                        try:
+                            prev_prev_char_idx = self.informe_text.index(f"{prev_char_idx} - 1 chars")
+                            prev_prev_char = self.informe_text.get(prev_prev_char_idx, prev_char_idx)
+                            if prev_prev_char in ['.', '!', '?', '\n']:
+                                text = text[0].upper() + text[1:] if text else text
+                            else:
+                                text = text[0].lower() + text[1:] if text else text
+                        except tk.TclError:
+                            text = text[0].upper() + text[1:] if text else text
+                    else:
+                        text = text[0].lower() + text[1:] if text else text
+
+                    # 2. Space before
+                    if prev_char and not prev_char.isspace() and prev_char not in ['\n', '(']:
+                        if text[0] not in [',', '.', ':', ';', '!', '?']:
+                            text = ' ' + text
+                    
+                    # 3. Space after
+                    if next_char and not next_char.isspace() and next_char not in [',', '.', ':', ';', '!', '?', ')', '\n']:
+                        text = text + ' '
+                else:
+                    text = text[0].upper() + text[1:] if text else text
+                    if next_char and not next_char.isspace() and next_char not in [',', '.', ':', ';', '!', '?', ')', '\n']:
+                        text = text + ' '
+
                 self.informe_text.insert(sel_start, text)
+                
             except tk.TclError:
                 cursor_pos = self.informe_text.index(tk.INSERT)
                 current_text = self.informe_text.get('1.0', tk.END)
@@ -1170,17 +1215,17 @@ class DictadoRadiologicoApp:
             self.process_audio(filename)
     
     def download_audio(self):
-        """Descarga el audio comprimido (OGG)"""
+        """Descarga el audio comprimido"""
         # Usar archivo comprimido si existe, sino el original
         file_to_download = self.compressed_audio_file or self.current_audio_file
         
         if file_to_download and os.path.exists(file_to_download):
             # Determinar extensión
-            ext = '.ogg' if file_to_download.endswith('.ogg') else '.wav'
+            ext = '.webm' if file_to_download.endswith('.webm') else '.ogg' if file_to_download.endswith('.ogg') else '.wav'
             
             dest = filedialog.asksaveasfilename(
                 defaultextension=ext,
-                filetypes=[('Audio comprimido OGG', '*.ogg'), ('Audio WAV', '*.wav')],
+                filetypes=[('Audio comprimido WebM', '*.webm'), ('Audio comprimido OGG', '*.ogg'), ('Audio WAV', '*.wav')],
                 initialfile=f"dictado-radiologico-{self.get_timestamp()}{ext}"
             )
             if dest:
