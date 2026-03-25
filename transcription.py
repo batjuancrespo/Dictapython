@@ -146,7 +146,26 @@ class TranscriptionService:
             if on_status:
                 on_status("Transcribiendo con Gemini...")
             
-            prompt = """Eres un sistema de transcripción estrictamente literal. Transcribe el audio exactamente como se dice, sin añadir puntuación. Los comandos de puntuación como "punto y aparte", "coma", "punto" deben aparecer como texto literal."""
+            prompt = """Eres un sistema de transcripción estrictamente literal. Tu única tarea es convertir el audio en las palabras exactas que se dicen, siguiendo las reglas y ejemplos a continuación.
+
+REGLAS CRÍTICAS:
+1.  NO interpretes el significado ni el formato. NO añadas signos de puntuación como puntos o comas.
+2.  Las pausas en el audio son solo eso, pausas, y NO deben representarse con saltos de línea ni párrafos. La transcripción debe ser un único bloque de texto continuo.
+3.   transcribe literalmente los comandos de puntuación. Si el usuario dice "punto y aparte", tu salida DEBE ser el texto "punto y aparte". Si dice "coma", debe ser "coma".
+
+Ejemplos de lo que es CORRECTO:
+
+Audio de entrada: "Hola coma me llamo Juan (pausa larga) y estoy dictando una prueba punto y aparte"
+Salida CORRECTA: "Hola coma me llamo Juan y estoy dictando una prueba punto y aparte"
+
+Ejemplos de lo que es INCORRECTO:
+
+Audio de entrada: "Hola coma me llamo Juan (pausa larga) y estoy dictando una prueba punto y aparte"
+Salida INCORRECTA:
+"Hola coma me llamo Juan
+y estoy dictando una prueba punto y aparte"
+
+El objetivo es una transcripción 100% literal para que otro programa pueda procesarla después."""
 
             for model_name in GEMINI_MODELS:
                 try:
