@@ -1,0 +1,298 @@
+# Módulo de transcripción con múltiples proveedores (Groq + Gemini)
+import base64
+import os
+from config import GROQ_API_KEY, GEMINI_MODELS, GROQ_MODELS
+
+# Importar Gemini (usamos el nuevo SDK google-genai)
+try:
+    from google import genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
+    print("ADVERTENCIA: google-genai no está instalado. Instala con: pip install google-genai")
+
+# Importar Groq
+try:
+    import groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+    print("ADVERTENCIA: groq no está instalado. Instala con: pip install groq")
+
+
+class TranscriptionService:
+    def __init__(self):
+        from config import GEMINI_API_KEYS, GROQ_API_KEY
+        self.gemini_clients = []
+        self.groq_client = None
+        self.current_key_index = 0
+        
+        # Configurar Gemini (múltiples claves para rotación)
+        if GENAI_AVAILABLE:
+            for i, key in enumerate(GEMINI_API_KEYS):
+                try:
+                    client = genai.Client(api_key=key)
+                    self.gemini_clients.append(client)
+                    print(f"Gemini (Key {i+1}) configurado correctamente")
+                except Exception as e:
+                    print(f"Error configurando Gemini (Key {i+1}): {e}")
+        
+        # Configurar Groq
+        if GROQ_AVAILABLE and GROQ_API_KEY:
+            try:
+                import groq
+                self.groq_client = groq.Groq(api_key=GROQ_API_KEY)
+                print("Groq (Whisper) configurado correctamente")
+            except Exception as e:
+                print(f"Error configurando Groq: {e}")
+    
+    def is_groq_available(self):
+        return GROQ_AVAILABLE and self.groq_client is not None and GROQ_API_KEY
+    
+    def is_gemini_available(self):
+        return GENAI_AVAILABLE and len(self.gemini_clients) > 0
+    
+    def is_available(self):
+        return self.is_groq_available() or self.is_gemini_available()
+    
+    def transcribe_audio(self, audio_file_path, provider='Gemini', on_status=None):
+        """Transcribe audio usando el proveedor especificado (Gemini o Groq)
+        Returns: (text, compressed_file, error)
+        """
+        
+        # Comprimir audio si es muy grande
+        compressed_file = self._compress_audio(audio_file_path, on_status)
+        
+        # Determinar mime_type
+        if compressed_file.endswith('.webm'):
+            mime_type = "audio/webm"
+        elif compressed_file.endswith('.ogg'):
+            mime_type = "audio/ogg"
+        elif compressed_file.endswith('.mp3'):
+            mime_type = "audio/mp3"
+        else:
+            mime_type = "audio/wav"
+        
+        # Leer archivo
+        with open(compressed_file, 'rb') as f:
+            audio_data = f.read()
+        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+        
+        # Determinar el orden según el proveedor seleccionado
+        if provider == 'Gemini':
+            # Intentar Gemini primero
+            if self.is_gemini_available():
+                result, error = self._transcribe_gemini(audio_base64, mime_type, on_status)
+                if result:
+                    return result, compressed_file, None
+                print(f"Gemini falló: {error}, intentando Groq...")
+            
+            # Fallback a Groq
+            if self.is_groq_available():
+                result, error = self._transcribe_groq(compressed_file, on_status)
+                return result, compressed_file, error
+        else:
+            # Intentar Groq primero
+            if self.is_groq_available():
+                result, error = self._transcribe_groq(compressed_file, on_status)
+                if result:
+                    return result, compressed_file, None
+                print(f"Groq falló: {error}, intentando Gemini...")
+            
+            # Fallback a Gemini
+            if self.is_gemini_available():
+                result, error = self._transcribe_gemini(audio_base64, mime_type, on_status)
+                return result, compressed_file, error
+        
+        return None, compressed_file, "No hay servicio de transcripción disponible. Configura GROQ_API_KEY o GEMINI_API_KEY en .env"
+    
+    def _transcribe_groq(self, audio_file_path, on_status=None):
+        """Transcribe usando Groq (Whisper)"""
+        if not self.is_groq_available():
+            return None, "Groq no disponible"
+        
+        # Verificar que es un archivo de audio
+        audio_extensions = ['.wav', '.ogg', '.mp3', '.m4a', '.webm', '.flac']
+        if not any(audio_file_path.lower().endswith(ext) for ext in audio_extensions):
+            return None, f"Archivo no es audio: {os.path.basename(audio_file_path)}"
+        
+        try:
+            if on_status:
+                on_status("Transcribiendo con Groq (Whisper)...")
+            
+            with open(audio_file_path, "rb") as file:
+                # Prompt mejorado con léxico médico y comandos claros
+                medical_prompt = (
+                    "Léxico médico: bazo, hígado, páncreas, riñones, adenopatías, parénquima, homogéneo, bordes lisos, "
+                    "esplenomesentérico, ateromatosis, aortoilíaca, hemiabdomen. "
+                    "Comandos de puntuación: PUNTO Y APARTE (salto de línea), PUNTO Y SEGUIDO (.), COMA (,), DOS PUNTOS (:). "
+                    "Instrucción: Transcribe exactamente lo que escuches. No intentes corregir la gramática ni añadir puntuación por tu cuenta. "
+                    "Si escuchas 'punto y aparte', escribe 'punto y aparte'. No pongas mayúsculas al azar."
+                )
+                
+                transcription = self.groq_client.audio.transcriptions.create(
+                    file=(audio_file_path, file.read()),
+                    model=GROQ_MODELS[0],  # whisper-large-v3
+                    language="es",
+                    prompt=medical_prompt
+                )
+            
+            return transcription.text, None
+            
+        except Exception as e:
+            return None, str(e)
+    
+    def _transcribe_gemini(self, audio_base64, mime_type, on_status=None):
+        """Transcribe usando Gemini con rotación de claves en caso de error de cuota"""
+        if not self.is_gemini_available():
+            return None, "Gemini no disponible"
+        
+        prompt = """Eres un sistema de transcripción estrictamente literal. Tu única tarea es convertir el audio en las palabras exactas que se dicen, siguiendo las reglas y ejemplos a continuación.
+
+REGLAS CRÍTICAS:
+1.  NO interpretes el significado ni el formato. NO añadas signos de puntuación como puntos o comas.
+2.  Las pausas en el audio son solo eso, pausas, y NO deben representarse con saltos de línea ni párrafos. La transcripción debe ser un único bloque de texto continuo.
+3.   transcribe literalmente los comandos de puntuación. Si el usuario dice "punto y aparte", tu salida DEBE ser el texto "punto y aparte". Si dice "coma", debe ser "coma".
+4.  NO pongas mayúsculas al azar al inicio de palabras si no siguen a una puntuación explícita (puntos). Si hay pausas largas, mantén el texto en minúsculas.
+
+Ejemplos de lo que es CORRECTO:
+
+Audio de entrada: "Hola coma me llamo Juan (pausa larga) y estoy dictando una prueba punto y aparte"
+Salida CORRECTA: "Hola coma me llamo Juan y estoy dictando una prueba punto y aparte"
+
+Ejemplos de lo que es INCORRECTO:
+
+Audio de entrada: "Hola coma me llamo Juan (pausa larga) y estoy dictando una prueba punto y aparte"
+Salida INCORRECTA:
+"Hola coma me llamo Juan
+y estoy dictando una prueba punto y aparte"
+
+El objetivo es una transcripción 100% literal para que otro programa pueda procesarla después."""
+
+        # Intentar con todas las claves disponibles en círculo
+        start_index = self.current_key_index
+        num_keys = len(self.gemini_clients)
+        
+        for i in range(num_keys):
+            idx = (start_index + i) % num_keys
+            client = self.gemini_clients[idx]
+            
+            try:
+                if on_status:
+                    if i > 0:
+                        on_status(f"Rotando a clave Gemini {idx+1} por cuota...")
+                    else:
+                        on_status("Transcribiendo con Gemini...")
+                
+                # Intentar con la lista de modelos de esta clave
+                from config import GEMINI_MODELS
+                for model_name in GEMINI_MODELS:
+                    try:
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=[
+                                prompt,
+                                {
+                                    "inline_data": {
+                                        "mime_type": mime_type,
+                                        "data": audio_base64
+                                    }
+                                }
+                            ]
+                        )
+                        
+                        if response and response.text:
+                            # Guardar el índice de la clave que funcionó para la próxima vez
+                            self.current_key_index = idx
+                            return response.text, None
+                            
+                    except Exception as model_error:
+                        error_msg = str(model_error).lower()
+                        # Si es error de cuota/rate limit, saltar a la siguiente clave
+                        if "429" in error_msg or "quota" in error_msg or "rate limit" in error_msg:
+                            print(f"Clave Gemini {idx+1} sin cuota para {model_name}. Probando siguiente clave...")
+                            break # Salir de la lista de modelos para probar la siguiente clave
+                        
+                        print(f"Error con modelo {model_name} en clave {idx+1}: {model_error}")
+                        continue # Probar siguiente modelo con esta misma clave
+                        
+            except Exception as e:
+                print(f"Error crítico en clave Gemini {idx+1}: {e}")
+                continue
+                
+        return None, "Todos los modelos y todas las claves de Gemini fallaron"
+    
+    def _compress_audio(self, audio_file_path, on_status=None):
+        """Comprime audio a OGG 32kbps (como la web original)"""
+        # Si no es WAV, no comprimir
+        if not audio_file_path.endswith('.wav'):
+            print(f"Archivo no es WAV: {os.path.basename(audio_file_path)}")
+            return audio_file_path
+        
+        file_size = os.path.getsize(audio_file_path)
+        
+        # Siempre descomprimimos a wav si falla ffmpeg
+        if on_status:
+            on_status("Comprimiendo audio...")
+        
+        try:
+            from pydub import AudioSegment
+            
+            # Configurar ruta a ffmpeg de forma estricta (local en la misma carpeta)
+            ffmpeg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg.exe")
+            if os.path.exists(ffmpeg_path):
+                AudioSegment.converter = ffmpeg_path
+            
+            print(f"Comprimiendo {file_size/1024/1024:.2f}MB...")
+            audio = AudioSegment.from_wav(audio_file_path)
+            compressed_file = audio_file_path.replace('.wav', '.webm')
+            
+            # Exportar como WebM con bitrate bajo
+            audio.export(compressed_file, format="webm", codec="libopus", bitrate="32k")
+            
+            new_size = os.path.getsize(compressed_file)
+            print(f"Comprimido a WebM: {file_size/1024/1024:.2f}MB -> {new_size/1024/1024:.2f}MB")
+            
+            return compressed_file if os.path.exists(compressed_file) else audio_file_path
+            
+        except Exception as e:
+            print(f"Error comprimiendo: {e}")
+            # Si falla, simplemente devolvemos el original
+            if "ffmpeg" in str(e).lower() or "winerror 2" in str(e).lower():
+                print("ADVERTENCIA: ffmpeg no está instalado o no se encuentra en el PATH. Subiendo archivo sin comprimir.")
+            return audio_file_path
+    
+    def transcribe_text(self, text, on_status=None):
+        """Procesa texto ya transcrito (para el Juanizador) con rotación de claves"""
+        if not self.is_gemini_available():
+            return None, "Servicio Gemini no disponible"
+            
+        from config import GEMINI_MODELS
+        start_index = self.current_key_index
+        num_keys = len(self.gemini_clients)
+        
+        for i in range(num_keys):
+            idx = (start_index + i) % num_keys
+            client = self.gemini_clients[idx]
+            
+            try:
+                if on_status:
+                    on_status(f"Procesando con IA (Clave {idx+1})...")
+                
+                response = client.models.generate_content(
+                    model=GEMINI_MODELS[0],
+                    contents=text
+                )
+                
+                if response and response.text:
+                    self.current_key_index = idx
+                    return response.text, None
+                    
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "429" in error_msg or "quota" in error_msg:
+                    print(f"Clave {idx+1} sin cuota para texto. Rotando...")
+                    continue
+                return None, f"Error en clave {idx+1}: {str(e)}"
+        
+        return None, "Todas las claves de Gemini fallaron al procesar texto"
